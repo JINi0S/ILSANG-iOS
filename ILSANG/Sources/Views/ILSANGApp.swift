@@ -9,27 +9,42 @@ import SwiftUI
 
 @main
 struct ILSANGApp: App {
+    @AppStorage("isLogin") var isLogin = Bool()
+    
     init() {
         setTabBarAppearance()
     }
     
-    @State private var isLogin: Bool = false
-    
     var body: some Scene {
         WindowGroup {
             if !isLogin {
-                LoginView(isLogin: $isLogin)
+                LoginView(vm: LoginViewModel())
             } else {
                 MainTabView()
+                    .task {
+                        if isLogin {
+                            await handleLogin()
+                        }
+                    }
             }
+        }
+    }
+    
+    @MainActor
+    private func handleLogin() async {
+        do {
+            isLogin = try await UserService.shared.login()
+        } catch {
+            isLogin = false
         }
     }
     
     func setTabBarAppearance() {
         let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(.white)
         appearance.shadowColor = UIColor(.grayDD)
         appearance.stackedItemPositioning = .centered
+        UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 }

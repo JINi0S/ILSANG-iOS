@@ -58,6 +58,8 @@ struct SettingView: View {
                             // 로그아웃 함수 호출
                             let result = await LogoutNetwork().getLogout()
                             print(result)
+                            // TODO: 로그아웃 로직 추가 확인 필요
+                            UserService.shared.isLogin = false
                         }
                     }
                 )

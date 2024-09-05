@@ -16,12 +16,12 @@ final class QuestNetwork {
         self.questUrl = questUrl
     }
     
-    func getUncompletedQuest(page: Int) async -> Result<AWSQuest, Error> {
+    func getUncompletedQuest(page: Int) async -> Result<ResponseWithPage<[Quest]>, Error> {
         let parameters: Parameters = ["page": page, "size": "10"]
         return await Network.requestData(url: questUrl+"uncompletedQuest", method: .get, parameters: parameters, withToken: true)
     }
     
-    func getCompletedQuest(page: Int) async -> Result<AWSQuest, Error> {
+    func getCompletedQuest(page: Int) async -> Result<ResponseWithPage<[Quest]>, Error> {
         let parameters: Parameters = ["page": page, "size": "10"]
         return await Network.requestData(url: questUrl+"completedQuest", method: .get, parameters: parameters, withToken: true)
     }

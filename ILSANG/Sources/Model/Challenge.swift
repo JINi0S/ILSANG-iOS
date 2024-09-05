@@ -5,16 +5,13 @@
 //  Created by Lee Jinhee on 6/26/24.
 //
 
-// TODO: ResponseWithPage와 응답 형식 통일 요청 후 수정
-// MARK: - ICH004 에서 사용되는 모델
-struct RandomChallengeList: Codable {
-    let content: [Challenge]
-    let last: Bool?
-}
+import Foundation
 
+// TODO: userNickName, quest 옵셔널 해제
 struct Challenge: Codable {
-    let challengeId, userNickName: String
-    let quest: QuestEntity
+    let challengeId: String
+    let userNickName: String?
+    let quest: QuestEntity?
     let receiptImageId, status: String
     let createdAt: String
     let likeCnt, hateCnt: Int
@@ -24,6 +21,7 @@ struct Challenge: Codable {
 struct QuestEntity: Codable {
     let questId: String
     let missions: [Mission]
+    let rewards: [Reward]
 }
 
 struct Mission: Codable {
@@ -31,4 +29,9 @@ struct Mission: Codable {
     let target: String?
     let quantity: Int
     let type, title: String
+}
+
+struct Reward: Codable {
+    let quantity: Int
+    let type: String
 }

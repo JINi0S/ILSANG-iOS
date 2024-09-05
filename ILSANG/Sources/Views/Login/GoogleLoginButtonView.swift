@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct GoogleLoginButtonView: View {
-    var buttonAction: () -> Void
+    var buttonAction:  () -> ()
     
     var body: some View {
         Button(action: buttonAction) {

@@ -28,6 +28,7 @@ struct ApprovalImageView: View {
                 )
                 .frame(height: 268)
             }
+            .background(Color.white)
             .cornerRadius(12)
             .overlay(alignment: .bottomLeading) {
                 if showProfile {

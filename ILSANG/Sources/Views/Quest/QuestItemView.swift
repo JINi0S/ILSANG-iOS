@@ -8,21 +8,18 @@
 import SwiftUI
 
 struct QuestItemView: View {
-    let quest: Quest
-    
-    private let separatorOffset = 80.0
+    let quest: QuestViewModelItem
+    let status: QuestStatus
+    private let separatorOffset = 72.0
     
     var body: some View {
         HStack(spacing: 0) {
-            Circle()
-                .foregroundColor(.gray100)
+            Image(uiImage: quest.image ?? .logo)
+                .resizable()
+                .scaledToFill()
                 .frame(width: 60, height: 60)
-                .overlay(alignment: .center) {
-                    Image(uiImage: quest.missionImage)
-                        .resizable()
-                        .scaledToFill()
-                        .cornerRadius(30)
-                }
+                .background(Color.badgeBlue)
+                .clipShape(Circle())
                 .padding(.leading, 20)
                 .padding(.trailing, 16)
                 .overlay(alignment: .top) {
@@ -42,20 +39,21 @@ struct QuestItemView: View {
                 Text(quest.missionTitle)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.black)
-
-                Text(quest.missionCompany)
+                    .minimumScaleFactor(0.05)
+                    .lineLimit(1)
+                
+                Text(quest.writer)
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.gray400)
             }
-            .padding(.top, 6)
             
-            Spacer()
+            Spacer(minLength: 8)
             
             Group {
-                switch quest.status {
-                case .ACTIVE:
+                switch status {
+                case .uncompleted:
                     IconView(iconWidth: 12, size: .small, icon: .arrowDown, color: .gray)
-                case .INACTIVE:
+                case .completed:
                     VStack(spacing: 7) {
                         IconView(iconWidth: 13, size: .small, icon: .check, color: .green)
                         Text("적립완료")
@@ -77,7 +75,7 @@ struct QuestItemView: View {
                 .offset(x: -separatorOffset)
                 .padding(.vertical, 12)
         }
-        .disabled(quest.status == .ACTIVE)
+        .disabled(status == .uncompleted)
         .cornerRadius(16)
         .shadow(color: .shadow7D.opacity(0.05), radius: 20, x: 0, y: 10)
         .padding(.horizontal, 20)
@@ -87,8 +85,8 @@ struct QuestItemView: View {
 
 #Preview {
     VStack {
-        QuestItemView(quest: Quest(id: "12", missionImage: .checkmark, missionTitle: "아메리카노 5잔 마시기", missionCompany: "이디야커피", reward: 50, status: .ACTIVE))
-        QuestItemView(quest: Quest(id: "13", missionImage: .checkmark, missionTitle: "아메리카노 15잔 마시기", missionCompany: "이디야커피", reward: 50, status: .INACTIVE))
+        QuestItemView(quest: QuestViewModelItem.mockData, status: .completed)
+        QuestItemView(quest: QuestViewModelItem.mockData, status: .uncompleted)
     }
 }
 

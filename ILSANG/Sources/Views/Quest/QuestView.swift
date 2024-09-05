@@ -8,21 +8,22 @@
 import SwiftUI
 
 struct QuestView: View {
-    @StateObject var vm: QuestViewModel = QuestViewModel()
+    @StateObject var vm: QuestViewModel = QuestViewModel(imageNetwork: ImageNetwork(), questNetwork: QuestNetwork())
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             headerView
-            
-            questListView
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.background)
-        .overlay {
-            if vm.isCurrentListEmpty {
-                questListEmptyView
+            switch vm.viewStatus {
+            case .loading:
+                ProgressView().frame(maxHeight: .infinity)
+            case .loaded:
+                questListView
+            case .error:
+                networkErrorView
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.background)
         .sheet(isPresented: $vm.showQuestSheet) {
             questSheetView
                 .presentationDetents([.height(540)])
@@ -48,6 +49,7 @@ extension QuestView {
                         .frame(height: 30)
                 }
             }
+            Spacer()
         }
         .frame(height: 50)
         .padding(.horizontal, 20)
@@ -55,24 +57,56 @@ extension QuestView {
     
     private var questListView: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            LazyVStack(spacing: 12) {
                 switch vm.selectedHeader {
-                case .ACTIVE:
-                    ForEach(vm.activeQuestList, id: \.id) { quest in
+                case .uncompleted:
+                    ForEach(vm.itemListByStatus[.uncompleted, default: []], id: \.id) { quest in
                         Button {
                             vm.tappedQuestBtn(quest: quest)
                         } label: {
-                            QuestItemView(quest: quest)
+                            QuestItemView(quest: quest, status: .uncompleted)
                         }
                     }
-                case .INACTIVE:
-                    ForEach(vm.inactiveQuestList, id: \.id) { quest in
-                        QuestItemView(quest: quest)
+                    if vm.isUncompletedQuestPageable {
+                        ProgressView()
+                            .onAppear {
+                                Task {
+                                    await vm.loadQuestListWithImage(
+                                        page: vm.itemListByStatus[.uncompleted, default: []].count / 10,
+                                        status: .uncompleted
+                                    )
+                                }
+                            }
+                    }
+                    
+                case .completed:
+                    ForEach(vm.itemListByStatus[.completed, default: []], id: \.id) { quest in
+                        QuestItemView(quest: quest, status: .completed)
+                    }
+                    if vm.isCompletedQuestPageable {
+                        ProgressView()
+                            .onAppear {
+                                Task {
+                                    await vm.loadQuestListWithImage(
+                                        page: vm.itemListByStatus[.completed, default: []].count / 10,
+                                        status: .completed
+                                    )
+                                }
+                            }
                     }
                 }
             }
             .padding(.top, 6)
             .padding(.bottom, 72)
+        }
+        .frame(maxWidth: .infinity)
+        .refreshable {
+            await vm.loadQuestListWithImage(page: 0, status: vm.selectedHeader)
+        }
+        .overlay {
+            if vm.isCurrentListEmpty {
+                questListEmptyView
+            }
         }
     }
     
@@ -80,20 +114,35 @@ extension QuestView {
         ErrorView(
             title: vm.selectedHeader.emptyTitle,
             subTitle: vm.selectedHeader.emptySubTitle
-        )
+        ) {
+            Task { await vm.loadInitialData() }
+        }
+    }
+    
+    private var networkErrorView: some View {
+        ErrorView(
+            systemImageName: "wifi.exclamationmark",
+            title: "네트워크 연결 상태를 확인해주세요",
+            subTitle: "네트워크 연결 상태가 좋지 않아\n퀘스트를 불러올 수 없어요 ",
+            emoticon: "🥲"
+        ) {
+            Task { await vm.loadInitialData() }
+        }
     }
     
     private var questSheetView: some View {
         VStack(spacing: 0) {
             Text("퀘스트 정보")
                 .font(.system(size: 17, weight: .bold))
-
-            Image(uiImage: vm.selectedQuest.missionImage)
-                .resizable()
-                .frame(width: 122, height: 122)
-                .padding(21)
             
-            Text(vm.selectedQuest.missionCompany)
+            Image(uiImage: vm.selectedQuest.image ?? .logo)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 122, height: 122)
+                .clipShape(Circle())
+                .padding(20)
+            
+            Text(vm.selectedQuest.writer)
                 .font(.system(size: 15, weight: .regular))
                 .padding(.bottom, 9)
             
@@ -128,5 +177,5 @@ extension QuestView {
 }
 
 #Preview {
-    QuestView()
+    QuestView(vm: QuestViewModel(imageNetwork: ImageNetwork(), questNetwork: QuestNetwork()))
 }

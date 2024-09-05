@@ -10,8 +10,7 @@ import Foundation
 import UIKit
 
 final class Network {
-    static let retryLimit = 3
-    static let retryDelay: TimeInterval = 1
+    static let maxUploadImageSizeKB = 100.0
     static let requestTimeout: TimeInterval = 30
     
     private static func buildURL(url: String, parameters: Parameters? = nil, page: Int? = nil, size: Int? = nil) -> URL? {
@@ -39,7 +38,8 @@ final class Network {
     private static func buildHeaders(withToken: Bool, contentType: ContentType = .json) -> HTTPHeaders {
         var headers: HTTPHeaders = ["accept": "application/json", "Content-Type": contentType.toString]
         if withToken {
-            headers.add(.authorization(APIManager.authDevelopToken))
+            let token = UserService.shared.authToken
+            headers.add(.authorization(token))
         }
         return headers
     }
@@ -111,46 +111,52 @@ final class Network {
         urlRequest.headers = headers
         urlRequest.timeoutInterval = requestTimeout
         
-        // 이미지 압축 & 다운샘플링
-        var uiImage = image
-        var currentCompressionQuality: CGFloat = 0.5
-        if image.size.width > 3000 || image.size.height > 3000 {
-            guard let downSampledImage = image.downSample(scale: 0.8) else {
-                return .failure(NetworkError.invalidImageData)
-            }
-            uiImage = downSampledImage
+        // MARK: 이미지 다운 샘플링
+        guard let downsampledImage = image.downSample() else {
+            return .failure(NetworkError.invalidImageData)
         }
         
-        // 이미지 업로드 실패 시 currentCompressionQuality 줄이면서 retryLimit만큼 재시도
-        for attempt in 1...self.retryLimit {
-            let imageData = uiImage.jpegData(compressionQuality: currentCompressionQuality) ?? Data()
-            
-            let response = await AF.upload(multipartFormData: { multipartFormData in
-                multipartFormData.append(imageData,
-                                         withName: "file",
-                                         fileName: "image.png",
-                                         mimeType: "image/jpeg")
-            }, with: urlRequest)
-                .serializingDecodable(Response<ImageEntity>.self)
-                .response
-            
-            switch response.result {
-            case .success(let res):
-                if let statusCode = response.response?.statusCode {
-                    return handleStatusCode(statusCode, data: res.data)
-                } else {
-                    return .failure(NetworkError.unknownError)
+        var currentImage = downsampledImage
+        
+        // MARK: 이미지 업로드 가능한 사이즈까지 압축
+        var compressedData = currentImage.jpegData(compressionQuality: 1.0) ?? Data()
+        
+        var compressionQuality: CGFloat = 0.9
+        while compressedData.kilobytes >= maxUploadImageSizeKB {
+            if compressionQuality > 0.1 {
+                compressionQuality = Double(round(1000 * (compressionQuality - 0.05)) / 1000)
+                compressedData = currentImage.jpegData(compressionQuality: compressionQuality) ?? Data()
+            } else {
+                /// 0.1로 압축한 data 사이즈가 maxUploadImageSizeKB보다 작도록 currentImage 리사이즈
+                var tempResizeData: Data = compressedData
+                while tempResizeData.kilobytes >= maxUploadImageSizeKB {
+                    let newWidth = max(currentImage.size.width - 120, currentImage.size.width * 0.5)
+                    currentImage = currentImage.resizeImage(newWidth: newWidth)
+                    tempResizeData = currentImage.jpegData(compressionQuality: 0.1) ?? Data()
                 }
-            case .failure(let error):
-                if attempt < retryLimit {
-                    try? await Task.sleep(nanoseconds: UInt64(self.retryDelay * 1_000_000_000))
-                    currentCompressionQuality = (currentCompressionQuality * 5) / 10
-                } else {
-                    return .failure(NetworkError.requestFailed(error.localizedDescription))
-                }
+                compressionQuality = 0.9
             }
         }
-        return .failure(NetworkError.unknownError)
+        
+        let response = await AF.upload(multipartFormData: { multipartFormData in
+            multipartFormData.append(compressedData,
+                                     withName: "file",
+                                     fileName: "image.png",
+                                     mimeType: "image/jpeg")
+        }, with: urlRequest)
+            .serializingDecodable(Response<ImageEntity>.self)
+            .response
+        
+        switch response.result {
+        case .success(let res):
+            if let statusCode = response.response?.statusCode {
+                return handleStatusCode(statusCode, data: res.data)
+            } else {
+                return .failure(NetworkError.unknownError)
+            }
+        case .failure(let error):
+            return .failure(NetworkError.requestFailed(error.localizedDescription))
+        }
     }
     
     private static func handleStatusCode<T>(_ statusCode: Int, data: T?) -> Result<T, Error> {

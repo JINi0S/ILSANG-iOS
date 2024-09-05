@@ -2,24 +2,15 @@
 //  Quest.swift
 //  ILSANG
 //
-//  Created by Kim Andrew on 7/2/24.
+//  Created by Lee Jinhee on 7/18/24.
 //
 
-import Foundation
-struct AWSQuest: Codable {
-    let size: Int
-    let data: [QuestData]
-    let total: Int
-    let page: Int
-    let status: String
-    let message: String
-}
-
-struct QuestData: Codable {
+struct Quest: Codable {
     let questId: String
-    let marketId: String
+    let writer: String
+    let quantity: Int
     let missionTitle: String
-    let rewardTitle: String
     let status: String
-    let expireDate: String?
+    let creatorRole: String
+    let imageId: String?
 }

@@ -12,14 +12,17 @@ struct XPModel: Decodable {
 }
 
 struct XP: Decodable {
-    let content: XPContent
-    let pageable: Int
+    let size: Int
+    let data: [XPContent]
+    let total: Int
+    let page: Int
     let status: String
     let message: String
 }
 
 struct XPContent: Decodable {
-    let Title: String
-    let Detail: String
-    let Xp: Int
+    let recordId: Int
+    let title: String
+    let xpPoint: Int
+    let createDate: String
 }

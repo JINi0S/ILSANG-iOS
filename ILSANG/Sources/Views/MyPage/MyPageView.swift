@@ -9,16 +9,17 @@ import SwiftUI
 
 struct MyPageView: View {
     
-    @State var testData: [QuestDetail] = [
-        QuestDetail(questTitle: "Title1", questImage: nil, questDetail: "Detail1", questLike: 50, questDate: "2023.03.03",questXP: 3,status: .QUEST),
-        QuestDetail(questTitle: "Title2", questImage: nil, questDetail: "Detail2", questLike: 100, questDate: "2023.03.06",questXP: 3,status: .QUEST)
-       ]
+    @State var activeTestData: [XPContent] = [
+            XPContent(recordId: 1, title: "Mission Accomplished", xpPoint: 100, createDate: "2024-06-21"),
+            XPContent(recordId: 2, title: "Daily Login", xpPoint: 50, createDate: "2024-06-22"),
+            XPContent(recordId: 3, title: "Quest Completed", xpPoint: 150, createDate: "2024-06-23")
+        ]
     
-    @StateObject var vm: MypageViewModel = MypageViewModel(userNetwork: UserNetwork(), questNetwork: ChallengeNetwork())
-    @State var segmenetSelect = 0
+    @StateObject var vm: MypageViewModel = MypageViewModel(userNetwork: UserNetwork(),xpNetwork: XPNetwork(), challengeNetwork: ChallengeNetwork(), imageNetwork: ImageNetwork())
+    
+    @State var segmentSelect = 0
     @State private var isSettingsViewActive = false
     
-    @State var questList: [Challenge]
     
     var body: some View {
         NavigationView {
@@ -45,16 +46,50 @@ struct MyPageView: View {
                 MyPageSegment(selectedIndex: $segmentSelect)
                 
                 // 퀘스트/활동/뱃지 리스트
-                MyPageList(data: $testData, segmentSelect: $segmentSelect)
+                switch segmentSelect {
+                case 0:
+                    if let questData = vm.challengeList, !questData.isEmpty {
+                        MyPageQuestList(questData: .constant(questData))
+                    } else {
+                        emptyView()
+                    }
+                case 1:
+                    if let activeData = vm.questXp, !activeData.isEmpty {
+                        MyPageActiveList(activeData: .constant(activeData))
+                    } else {
+                        emptyView()
+                    }
+                case 2:
+                    emptyView()
+                    
+                    // 뱃지 구현후 적용
+                    //MyPageBadgeList(badgeData: .constant([]))
+                default:
+                    emptyView()
+                }
             }
             .padding(.horizontal, 20)
             .background(Color.background)
         }
         .task {
             await vm.getQuest(page: 0)
-            questList = vm.QuestList!
-            
-            Log(questList)
+            await vm.getxpLog(page: 0, size: 10)
+        }
+    }
+}
+
+struct emptyView: View {
+    var body: some View {
+        VStack {
+            Text("Coming Soon!")
+                .font(.system(size: 17))
+                .fontWeight(.medium)
+                .foregroundColor(.gray400)
+                .multilineTextAlignment(.center)
+                .refreshable {
+                    // 데이터 리프레시
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

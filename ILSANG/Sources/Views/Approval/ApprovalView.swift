@@ -18,39 +18,55 @@ struct ApprovalView: View {
     private let viewHeight = UIScreen.main.bounds.height
     
     var body: some View {
-        VStack(spacing: 0) {
-            switch vm.viewStatus {
-            case .error:
-                networkErrorView
-            case .loading:
-                ProgressView()
-            case .loaded:
-                itemView
-                recommendButtons
-            }
-        }
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            Group {
+        ZStack {
+            VStack(spacing: 0) {
                 switch vm.viewStatus {
-                case .error, .loading:
-                    Color.background
+                case .error:
+                    networkErrorView
+                case .loading:
+                    ProgressView()
                 case .loaded:
-                    if !vm.itemList.isEmpty {
-                        Image(uiImage: vm.itemList[vm.currentIdx].image ?? .logo)
-                            .resizable()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .ignoresSafeArea()
-                            .scaledToFill()
-                            .scaleEffect(1.4)
-                            .blur(radius: 30, opaque: true)
-                            .background(Color.black.opacity(0.2))
-                    }
+                    itemView
+                    recommendButtons
                 }
             }
-        )
-        .ignoresSafeArea()
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                Group {
+                    switch vm.viewStatus {
+                    case .error, .loading:
+                        Color.background
+                    case .loaded:
+                        if !vm.itemList.isEmpty {
+                            Image(uiImage: vm.itemList[vm.currentIdx].image ?? .logo)
+                                .resizable()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .ignoresSafeArea()
+                                .scaledToFill()
+                                .scaleEffect(1.4)
+                                .blur(radius: 30, opaque: true)
+                                .background(Color.black.opacity(0.2))
+                        }
+                    }
+                }
+            )
+            .ignoresSafeArea()
+            
+            if vm.showReportAlert {
+                SettingAlertView(
+                    alertType: .Report,
+                    onCancel: {
+                        vm.showReportAlert = false
+                    }, onConfirm: {
+                        Task {
+                            await vm.reportChallenge()
+                            vm.showReportAlert = false
+                        }
+                    }
+                )
+            }
+        }
         .task {
             await vm.getData()
         }
@@ -95,11 +111,24 @@ struct ApprovalView: View {
         .mask(alignment: .top) {
             maskArea
         }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                vm.showReportAlert = true
+            } label: {
+                Image(systemName: "ellipsis")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24)
+                    .frame(width: 44, height: 44)
+                    .foregroundStyle(.gray100)
+            }
+            .padding(.trailing, 10)
+        }
     }
     
     private func imageView(for item: ApprovalViewModelItem, diff: Int) -> some View {
         ApprovalImageView(
-            image: item.image ?? .loginLogo,
+            image: item.image ?? .logo,
             width: abs(viewWidth - 40 * CGFloat(diff)),
             height: (viewHeight / 2) - CGFloat(diff) * 26,
             nickname: item.nickname,
@@ -153,8 +182,8 @@ struct ApprovalView: View {
             .opacity(active ? 1 : 0.3)
             .frame(width: 69, height: 69)
             .background(
-             Circle()
-                .foregroundStyle(.white.opacity(active ? 0.3 : 0.1))
+                Circle()
+                    .foregroundStyle(.white.opacity(active ? 0.3 : 0.1))
             )
     }
     

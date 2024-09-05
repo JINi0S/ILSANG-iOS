@@ -6,28 +6,21 @@
 //
 
 import SwiftUI
-import _AuthenticationServices_SwiftUI
+import AuthenticationServices
 
 struct AppleLoginButtonView: View {
+    @ObservedObject var vm: LoginViewModel
     
-    //@EnvironmentObject var userService: UserService
-            
     var body: some View {
-        SignInWithAppleButton { (request) in
+        SignInWithAppleButton { request in
             request.requestedScopes = [.email]
             request.nonce = sha256(randomNonceString())
-        } onCompletion: { (result) in
+        } onCompletion: { result in
             switch result {
-            case .success(let user):
-                Task {
-                    guard let credential = user.credential as? ASAuthorizationAppleIDCredential else {
-                        print("error with credential")
-                        return
-                    }
-                    //await userService.login(appleCredential: credential, email: userService.userEmail)
-                }
+            case .success(let authResult):
+                vm.loginWithApple(credential: authResult.credential)
             case .failure(let error):
-                print(error.localizedDescription)
+                Log(error.localizedDescription)
             }
         }
         .frame(width: 270, height: 50)

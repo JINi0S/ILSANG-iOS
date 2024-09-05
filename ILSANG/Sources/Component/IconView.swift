@@ -56,7 +56,7 @@ enum IconColor {
         case .blue:
             return .subBlue
         case .gray:
-            return .gray300
+            return .gray400
         }
     }
     
@@ -69,7 +69,7 @@ enum IconColor {
         case .blue:
             return .badgeBlue
         case .gray:
-            return .gray100
+            return .gray400.opacity(0.1)
         }
     }
 }

@@ -12,28 +12,31 @@ struct NavigationTitleView: View {
     var isSeparatorHidden = false
     var isDismissButtonHidden = false
     var action: (() -> Void?)? = nil
-    
+
     var body: some View {
-        Text(title)
-            .frame(maxWidth: .infinity)
-            .overlay(alignment: .leading) {
-                if !isDismissButtonHidden {
-                    Button {
-                        self.action?()
-                    } label: {
-                        DismissButton()
+        VStack(spacing: 0) {
+            Text(title)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .leading) {
+                    if !isDismissButtonHidden {
+                        Button {
+                            self.action?()
+                        } label: {
+                            DismissButton()
+                        }
                     }
                 }
+                .foregroundColor(.gray500)
+                .font(.system(size: 17, weight: .bold))
+                .padding(.horizontal, 20)
+                .frame(height: 45)
+                .background(Color.white)
+            
+            if !isSeparatorHidden {
+                SeparatorView()
             }
-            .foregroundColor(.gray500)
-            .font(.system(size: 17, weight: .bold))
-            .padding(.horizontal, 20)
-            .frame(height: 45)
-            .background(Color.white)
-        
-        if !isSeparatorHidden {
-            SeparatorView()
         }
+        .padding(.bottom, -8)
     }
 }
 
@@ -51,5 +54,15 @@ struct DismissButton: View {
         Image(systemName: "chevron.left")
             .foregroundColor(.gray500)
             .font(.custom("SFPRODISPLAYREGULAR", size: 22))
+    }
+}
+
+struct DeleteButton: View {
+    var body: some View {
+        Image(systemName: "trash")
+            .foregroundColor(.gray500)
+            .font(.custom("SFPRODISPLAYREGULAR", size: 22))
+            .padding(.top, 10)
+            .padding(.horizontal, 15)
     }
 }

@@ -8,36 +8,24 @@
 import SwiftUI
 
 struct LoginView: View {
-    
-    @Binding var isLogin : Bool
-        
-    var kakaoButtonAction: () -> Void {
-        {
-            //MARK: 로그인 기능 구현
-        }
-    }
-    
-    var googleButtonAction: () -> Void {
-        {
-            //MARK: 로그인 기능 구현
-        }
-    }
+    @StateObject var vm: LoginViewModel
     
     var body: some View {
         VStack(spacing: 84) {
             Image(.loginLogo)
             
             VStack(spacing: 16) {
-                KakaoLoginButtonView(buttonAction: kakaoButtonAction)
-                GoogleLoginButtonView(buttonAction: googleButtonAction)
-                AppleLoginButtonView()
-                //.environmentObject(userService)
-                
-                //MARK: 실제 로그인이 아니고 뷰만 이동합니다.
-                //await userService.loginWithTest()
+#if DEBUG
+                KakaoLoginButtonView(buttonAction: vm.kakaoButtonAction)
+                GoogleLoginButtonView(buttonAction: vm.googleButtonAction)
+#endif
+                AppleLoginButtonView(vm: vm)
+#if DEBUG
                 Text("테스트 로그인")
-                    .onTapGesture { isLogin.toggle() }
+                    .onTapGesture { vm.testLogin() }
+#endif
             }
+            .frame(height: 200)
         }
         .padding(.top, 90)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -47,5 +35,5 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(isLogin: .constant(false))
+    LoginView(vm: LoginViewModel())
 }

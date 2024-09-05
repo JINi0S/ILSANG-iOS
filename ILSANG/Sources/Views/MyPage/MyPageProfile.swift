@@ -9,18 +9,18 @@ import SwiftUI
 
 struct MyPageProfile: View {
     
-    @StateObject var vm = MypageViewModel(userNetwork: UserNetwork(),questNetwork: ChallengeNetwork())
+    @StateObject var vm = MypageViewModel(userNetwork: UserNetwork(),xpNetwork: XPNetwork(), challengeNetwork: ChallengeNetwork(), imageNetwork: ImageNetwork())
     
     var body: some View {
         NavigationLink(destination: ChangeNickNameView()) {
             HStack {
                 //프로필
-                ProfileImageView(profileImage: nil, level: 3)
+                ProfileImageView(profileImage: nil, level: vm.convertXPtoLv(XP: vm.userData?.xpPoint ?? 9))
                 
                 // 프로필 상세
                 VStack (alignment: .leading) {
                     //유저 이름
-                    Text(vm.userData?.nickname ?? "닉네임")
+                    Text(vm.userData?.nickname ?? "일상73079405")
                         .font(.system(size: 16, weight: .bold))
                         .underline(true, color: .gray300)
                         .foregroundStyle(.gray500)
@@ -28,17 +28,17 @@ struct MyPageProfile: View {
                     
                     HStack {
                         // 프로그레스 바
-                        ProgressBar(userXP: vm.userData?.xpPoint ?? 40, levelXP: 100)
+                        vm.ProgressBar(userXP: vm.userData?.xpPoint ?? 0)
                             .frame(height: 10)
                         
                         // 경험치 Text
-                        Text(String(vm.userData?.xpPoint ?? 1300)+"XP")
+                        Text(String(vm.userData?.xpPoint ?? 0)+"XP")
                             .font(.system(size: 13))
                             .fontWeight(.bold)
                             .foregroundColor(.accentColor)
                     }
                     
-                    Text("다음 레벨까지 1050XP 남았어요!")
+                    Text("다음 레벨까지 \(vm.xpForNextLv(XP: vm.userData?.xpPoint ?? 50))XP 남았어요!")
                         .font(.system(size: 13))
                         .foregroundColor(.gray500)
                 }
@@ -50,6 +50,7 @@ struct MyPageProfile: View {
             )
             .task {
                 await vm.getUser()
+                Log(vm.userData)
             }
         }
     }
@@ -107,41 +108,6 @@ struct ProfileImageView: View {
         .frame(height: 68)
     }
 }
-
-//MARK: 공용으로 이동?
-struct ProgressBar: View {
-    
-    var userXP : Int
-    var levelXP : Int
-    
-    //소수 2자리로 변경합니다.
-    private var progress: CGFloat {
-        CGFloat(userXP) / CGFloat(levelXP)
-    }
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .frame(width: geometry.size.width, height: 11)
-                    .cornerRadius(6)
-                    .opacity(0.3)
-                    .foregroundColor(.gray100)
-                
-                Rectangle()
-                    .frame(
-                        width: min(progress * geometry.size.width,
-                                   geometry.size.width),
-                        height: 10
-                    )
-                    .cornerRadius(6)
-                //MARK: 게이지 별 디자인 요청
-                    .foregroundColor(.accentColor)
-            }
-        }
-    }
-}
-
 
 #Preview {
     MyPageProfile()

@@ -20,14 +20,22 @@ final class ApprovalViewModel: ObservableObject {
     @Published var currentIdx = 0 {
         didSet {
             Task {
-                if !itemList.isEmpty {
-                    await getEmoji(challengeId: itemList[currentIdx].id)
-                }
+                await self.handleIndexChange(oldValue)
             }
         }
     }
     @Published var isScrolling = false
     @Published var emoji: Emoji?
+    @Published var showReportAlert = false
+    
+    private lazy var paginationManager = PaginationManager<ApprovalViewModelItem>(
+        size: 10,
+        threshold: 3,
+        loadPage: { [weak self] page in
+            guard let self = self else { return ([], 0) }
+            return await self.getChallengesWithImage(page: page)
+        }
+    )
     
     private let imageNetwork: ImageNetwork
     private let emojiNetwork: EmojiNetwork
@@ -39,11 +47,16 @@ final class ApprovalViewModel: ObservableObject {
         self.challengeNetwork = challengeNetwork
     }
     
+    @MainActor
     func getData() async {
-        await changeViewStatus(.loading)
-        await getChallengesWithImage(page: 0)
-        await getEmoji(challengeId: itemList[currentIdx].id)
-        await changeViewStatus(.loaded)
+        changeViewStatus(.loading)
+        await self.paginationManager.loadData(isRefreshing: true)
+
+        self.currentIdx = 0
+        if let challengeId = itemList.first?.id {
+            await getEmoji(challengeId: challengeId)
+        }
+        changeViewStatus(.loaded)
     }
     
     @MainActor
@@ -52,9 +65,23 @@ final class ApprovalViewModel: ObservableObject {
     }
     
     @MainActor
-    func getChallengesWithImage(page: Int) async {
-        var challenges = await getRandomChallenges(page: page)
-
+    func handleIndexChange(_ previousIdx: Int) async {
+        guard !itemList.isEmpty else { return }
+        
+        await getEmoji(challengeId: itemList[currentIdx].id)
+        
+        if previousIdx < currentIdx {
+            if paginationManager.canLoadMoreData(index: currentIdx, currentCount: itemList.count) {
+                await paginationManager.loadData(isRefreshing: false)
+            }
+        }
+    }
+    
+    @MainActor
+    func getChallengesWithImage(page: Int) async -> ([ApprovalViewModelItem], Int) {
+        let getChallengeResult = await getRandomChallenges(page: page, size: paginationManager.size)
+        var challenges = getChallengeResult.data
+        
         // 중복된 id 제거
         var seenIDs = Set<String>()
         challenges = challenges.filter { challenge in
@@ -90,15 +117,17 @@ final class ApprovalViewModel: ObservableObject {
                 }
             }
         }
+        
+        return (itemList, getChallengeResult.total)
     }
     
-    private func getRandomChallenges(page: Int) async -> [ApprovalViewModelItem] {
-        let res = await challengeNetwork.getRandomChallenges(page: page)
+    private func getRandomChallenges(page: Int, size: Int) async -> (data: [ApprovalViewModelItem], total: Int) {
+        let res = await challengeNetwork.getRandomChallenges(page: page, size: size)
         switch res {
-        case .success(let success):
-            return success.content.map { ApprovalViewModelItem.init(challenge: $0) }
+        case .success(let response):
+            return (response.data.map { ApprovalViewModelItem.init(challenge: $0) }, response.total)
         case .failure:
-            return []
+            return ([], 0)
         }
     }
     
@@ -189,6 +218,17 @@ final class ApprovalViewModel: ObservableObject {
         }
     }
     
+    func reportChallenge() async {
+        let challengeId = self.itemList[currentIdx].id
+        let result = await challengeNetwork.patchChallenge(challengeId: challengeId)
+        switch result {
+        case .success:
+            await getData()
+        case .failure(let err):
+            Log("챌린지 신고 실패 \(challengeId) \(err.localizedDescription)")
+        }
+    }
+    
     func handleDragChange(_ value: DragGesture.Value) {
         if value.translation.height < 0 && currentIdx != itemList.count-1 {
             isScrolling = true
@@ -261,11 +301,12 @@ struct ApprovalViewModelItem: Identifiable {
     
     init(challenge: Challenge) {
         self.id = challenge.challengeId
-        self.title = challenge.quest.missions.first?.title ?? ""
+        self.title = challenge.quest?.missions.first?.title ?? ""
         self.image = nil
         self.imageId = challenge.receiptImageId
         self.offset = 0
-        self.nickname = challenge.userNickName
+        // TODO: nickname 옵셔널 해제
+        self.nickname = challenge.userNickName ?? "일상"
         self.time = challenge.createdAt.timeAgoSinceDate()
     }
     
