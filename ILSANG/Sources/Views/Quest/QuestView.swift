@@ -8,11 +8,21 @@
 import SwiftUI
 
 struct QuestView: View {
-    @StateObject var vm: QuestViewModel = QuestViewModel(imageNetwork: ImageNetwork(), questNetwork: QuestNetwork())
+    @StateObject var vm: QuestViewModel
+    @EnvironmentObject var sharedState: SharedState
+
+    init(initialXpStat: XpStat) {
+        _vm = StateObject(wrappedValue: QuestViewModel(questNetwork: QuestNetwork(), selectedXpStat: initialXpStat))
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             headerView
+                
+            if vm.selectedHeader == .default || vm.selectedHeader == .repeat {
+                subHeaderView
+            }
+            
             switch vm.viewStatus {
             case .loading:
                 ProgressView().frame(maxHeight: .infinity)
@@ -24,21 +34,31 @@ struct QuestView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.background)
+        .onReceive(vm.$selectedHeader
+            .combineLatest(vm.$selectedXpStat, vm.repeatFilterState.$selectedValue, vm.repeatFilterState.$selectedValue)) { _ in
+            vm.closeFilterPicker()
+        }
+        .onReceive(sharedState.$selectedXpStat) { newValue in
+            vm.selectedXpStat = newValue
+        }
         .sheet(isPresented: $vm.showQuestSheet) {
-            questSheetView
-                .presentationDetents([.height(540)])
-                .presentationDragIndicator(.visible)
+            QuestDetailView(quest: vm.selectedQuest) {
+                vm.tappedQuestApprovalBtn()
+            }
+            .presentationDetents([.height(464)])
+            .presentationDragIndicator(.hidden)
         }
         .fullScreenCover(isPresented: $vm.showSubmitRouterView) {
-            SubmitRouterView(selectedQuestId: vm.selectedQuest.id)
+            SubmitRouterView(selectedQuest: vm.selectedQuest)
                 .interactiveDismissDisabled()
         }
     }
 }
 
 extension QuestView {
+    // 헤더 - 기본/반복/완료
     private var headerView: some View {
-        HStack(spacing: 15) {
+        HStack(spacing: 16) {
             ForEach(QuestStatus.allCases, id: \.headerText) { status in
                 Button {
                     vm.selectedHeader = status
@@ -55,54 +75,82 @@ extension QuestView {
         .padding(.horizontal, 20)
     }
     
+    // 서브헤더 - 5가지 스탯
+    private var subHeaderView: some View {
+        StatHeaderView(
+            selectedXpStat: $vm.selectedXpStat,
+            horizontalPadding: 0,
+            height: 44,
+            hasBottomLine: true
+        )
+    }
+    
     private var questListView: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 switch vm.selectedHeader {
-                case .uncompleted:
-                    ForEach(vm.itemListByStatus[.uncompleted, default: []], id: \.id) { quest in
-                        Button {
+                case .default: // 미완료 퀘스트
+                    ForEach(vm.filteredDefaultQuestListByXpStat, id: \.id) { quest in
+                        QuestItemView(
+                            quest: quest,
+                            style: UncompletedStyle(),
+                            tagTitle: String(quest.totalRewardXP())+"XP"
+                        ) {
                             vm.tappedQuestBtn(quest: quest)
-                        } label: {
-                            QuestItemView(quest: quest, status: .uncompleted)
                         }
                     }
-                    if vm.isUncompletedQuestPageable {
-                        ProgressView()
-                            .onAppear {
-                                Task {
-                                    await vm.loadQuestListWithImage(
-                                        page: vm.itemListByStatus[.uncompleted, default: []].count / 10,
-                                        status: .uncompleted
-                                    )
-                                }
-                            }
+                case .repeat: // 미완료 반복 퀘스트
+                    ForEach(vm.filteredRepeatQuestListByXpStat, id: \.id) { quest in
+                        QuestItemView(
+                            quest: quest,
+                            style: RepeatStyle(repeatType: vm.repeatFilterState.selectedValue),
+                            tagTitle: vm.repeatFilterState.selectedValue.description
+                        ) {
+                            vm.tappedQuestBtn(quest: quest)
+                        }
+                    }
+                case .completed: // 완료 퀘스트
+                    ForEach(vm.itemListByStatus[.completed, default: []], id: \.id) { quest in
+                        QuestItemView(
+                            quest: quest,
+                            style: CompletedStyle(),
+                            tagTitle: String(quest.totalRewardXP())+"XP"
+                        ) { }
                     }
                     
-                case .completed:
-                    ForEach(vm.itemListByStatus[.completed, default: []], id: \.id) { quest in
-                        QuestItemView(quest: quest, status: .completed)
-                    }
-                    if vm.isCompletedQuestPageable {
+                    if vm.hasMorePage(status: .completed) {
                         ProgressView()
                             .onAppear {
                                 Task {
-                                    await vm.loadQuestListWithImage(
-                                        page: vm.itemListByStatus[.completed, default: []].count / 10,
-                                        status: .completed
-                                    )
+                                    await vm.completedPaginationManager.loadData(isRefreshing: false)
                                 }
                             }
                     }
                 }
             }
-            .padding(.top, 6)
+            .padding(.top, vm.selectedHeader == .default || vm.selectedHeader == .repeat ? 70 : 0)
+            .overlay(alignment: .top) {
+                Group {
+                    if (vm.selectedHeader == .default) {
+                        filterPickerDefaultView
+                    } else if (vm.selectedHeader == .repeat) {
+                        HStack(alignment: .top, spacing: 8) {
+                            filterPickerRepeatView
+                            filterPickerDefaultView
+                        }
+                    }
+                }
+                .padding(.top, 13)
+                .padding(.bottom, 16)
+                .padding(.trailing, 20)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
             .padding(.bottom, 72)
         }
-        .frame(maxWidth: .infinity)
         .refreshable {
-            await vm.loadQuestListWithImage(page: 0, status: vm.selectedHeader)
+            await vm.refreshData()
         }
+        .frame(maxWidth: .infinity)
         .overlay {
             if vm.isCurrentListEmpty {
                 questListEmptyView
@@ -110,13 +158,28 @@ extension QuestView {
         }
     }
     
+    private var filterPickerDefaultView: some View {
+        PickerView<QuestFilterType>(
+            status: $vm.questFilterState.pickerStatus,
+            selection: $vm.questFilterState.selectedValue,
+            width: 150
+        )
+    }
+    
+    private var filterPickerRepeatView: some View {
+        PickerView<RepeatType>(
+            status: $vm.repeatFilterState.pickerStatus,
+            selection: $vm.repeatFilterState.selectedValue,
+            width: 85
+        )
+    }
+    
     private var questListEmptyView: some View {
         ErrorView(
             title: vm.selectedHeader.emptyTitle,
-            subTitle: vm.selectedHeader.emptySubTitle
-        ) {
-            Task { await vm.loadInitialData() }
-        }
+            subTitle: vm.selectedHeader.emptySubTitle,
+            showButton: false
+        )
     }
     
     private var networkErrorView: some View {
@@ -129,53 +192,8 @@ extension QuestView {
             Task { await vm.loadInitialData() }
         }
     }
-    
-    private var questSheetView: some View {
-        VStack(spacing: 0) {
-            Text("퀘스트 정보")
-                .font(.system(size: 17, weight: .bold))
-            
-            Image(uiImage: vm.selectedQuest.image ?? .logo)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 122, height: 122)
-                .clipShape(Circle())
-                .padding(20)
-            
-            Text(vm.selectedQuest.writer)
-                .font(.system(size: 15, weight: .regular))
-                .padding(.bottom, 9)
-            
-            Text(vm.selectedQuest.missionTitle)
-                .font(.system(size: 18, weight: .bold))
-                .padding(.bottom, 22)
-            
-            Text("+" + String(vm.selectedQuest.reward) + "XP")
-                .font(.system(size: 30, weight: .semibold))
-                .padding(.horizontal, 38)
-                .padding(.vertical, 31)
-                .foregroundStyle(.primaryPurple)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .foregroundStyle(.primary100.opacity(0.5))
-                )
-                .padding(.bottom, 15)
-            
-            Text("퀘스트를 수행하셨나요?\n인증 후 포인트를 적립받으세요")
-                .font(.system(size: 14, weight: .regular))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .padding(.bottom, 26)
-
-            PrimaryButton(title: "퀘스트 인증하기") {
-                vm.tappedQuestApprovalBtn()
-            }
-        }
-        .foregroundStyle(.gray500)
-        .padding(20)
-    }
 }
 
 #Preview {
-    QuestView(vm: QuestViewModel(imageNetwork: ImageNetwork(), questNetwork: QuestNetwork()))
+    QuestView(initialXpStat:  .charm)
 }

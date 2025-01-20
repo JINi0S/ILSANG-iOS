@@ -61,6 +61,7 @@ final class Network {
         } else {
             request = AF.request(fullPath, method: method, encoding: parameters != nil ? URLEncoding.queryString : JSONEncoding.default, headers: headers)
         }
+        Log(fullPath)
         
         let response = await request.validate(statusCode: 200..<300)
             .serializingDecodable(T.self, emptyResponseCodes: [200])
@@ -70,6 +71,7 @@ final class Network {
         case .success(let res):
             return .success(res)
         case .failure(let error):
+            Log(error.localizedDescription)
             return .failure(error)
         }
     }

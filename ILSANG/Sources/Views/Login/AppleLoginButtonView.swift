@@ -23,25 +23,29 @@ struct AppleLoginButtonView: View {
                 Log(error.localizedDescription)
             }
         }
-        .frame(width: 270, height: 50)
-        
+        .frame(height: 60)
+        .frame(maxWidth: .infinity)
         .overlay {
-            HStack {
+            HStack(spacing: 16) {
                 Image(LoginButton.apple.imageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 18)
-                Spacer()
                 Text(LoginButton.apple.labelText)
                     .foregroundColor(LoginButton.apple.accentColor)
-                    .font(.custom(LoginButton.apple.fontName, size: 14))
-                Spacer()
+                    .font(.custom(LoginButton.apple.fontName, size: 15))
+                    .bold()
             }
             .padding(.horizontal, 18)
-            .frame(width: 270, height: 50)
+            .frame(height: 60)
+            .frame(maxWidth: .infinity)
             .background(LoginButton.apple.backgroundColor)
             .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
+}
+
+#Preview {
+    AppleLoginButtonView(vm: LoginViewModel())
 }

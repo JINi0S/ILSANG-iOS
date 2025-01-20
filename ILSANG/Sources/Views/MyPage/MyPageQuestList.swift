@@ -9,7 +9,7 @@ import SwiftUI
 //MARK: 색상 폰트 변경 요청
 struct MyPageQuestList: View {
     
-    @ObservedObject var vm: MypageViewModel = MypageViewModel(userNetwork: UserNetwork(),xpNetwork: XPNetwork(), challengeNetwork: ChallengeNetwork(), imageNetwork: ImageNetwork())
+    @ObservedObject var vm = MypageViewModel(userNetwork: UserNetwork(), challengeNetwork: ChallengeNetwork(), imageNetwork: ImageNetwork(), xpNetwork: XPNetwork())
     
     @Binding var questData: [Challenge]
     
@@ -29,7 +29,7 @@ struct MyPageQuestList: View {
                 VStack(spacing: 12) {
                     ForEach(questData, id: \.challengeId) { Data in
                         NavigationLink(destination: DetailQuestview(ChallengeData: Data)) {
-                            ListStruct(title: Data.quest?.missions.first?.title ?? "챌린지명", detail: Data.createdAt.timeAgoCreatedAt(), point: nil)
+                            ListStruct(title: Data.missionTitle ?? "챌린지명", detail: Data.createdAt.timeAgoCreatedAt(), point: nil)
                         }
                     }
                 }

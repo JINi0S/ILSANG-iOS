@@ -63,11 +63,6 @@ struct CameraView: View {
             /// 사진찍기 버튼
             Button {
                 viewModel.capturePhoto()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if let myImage = viewModel.recentImage {
-                        self.submitViewModel.selectedImage = myImage
-                    }
-                }
             } label: {
                 Circle()
                     .stroke(lineWidth: 5)
@@ -82,6 +77,13 @@ struct CameraView: View {
         }
         .padding(.horizontal, 30)
         .padding(.bottom, 75)
+        .onChange(of: viewModel.recentImage) { _ in
+            // 카메라에서 촬영한 이미지로 카메라 뷰모델의 최근 이미지가 변경되면,
+            // submitViewModel의 이미지도 업데이트하여 SubmitRouterView에서 이미지를 보여줍니다.
+            if let myImage = viewModel.recentImage {
+                self.submitViewModel.selectedImage = myImage
+            }
+        }
     }
 }
 
@@ -117,5 +119,5 @@ struct CameraPreviewView: UIViewRepresentable {
 }
 
 #Preview {
-    CameraView(submitViewModel: SubmitRouterViewModel(selectedQuestId: ""))
+    CameraView(submitViewModel: SubmitRouterViewModel(selectedQuest: .mockData))
 }

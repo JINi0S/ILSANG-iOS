@@ -9,11 +9,9 @@ import Alamofire
 import Foundation
 
 final class ChallengeNetwork {
-    private let network: Network
     private let url: String
 
-    init(network: Network = Network(), url: String =  APIManager.makeURL(CustomerTarget(path: ""))) {
-        self.network = network
+    init(url: String =  APIManager.makeURL(CustomerTarget(path: ""))) {
         self.url = url
     }
     
@@ -41,7 +39,7 @@ final class ChallengeNetwork {
     
     func patchChallenge(challengeId: String) async -> Result<ResponseWithEmpty, Error> {
         let parameters: Parameters = ["challengeId": challengeId, "status": "REPORTED"]
-        return await Network.requestData(url: url+"report", method: .patch, parameters: parameters, withToken: true)
+        return await Network.requestData(url: url+"status", method: .patch, parameters: parameters, withToken: true)
     }
     
     func deleteChallenge(challengeId: String) async -> Bool {

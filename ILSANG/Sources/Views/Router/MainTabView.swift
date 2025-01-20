@@ -8,19 +8,20 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State var selectedTab: Tab = .quest
-    
+    @StateObject var sharedState = SharedState()
+
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $sharedState.selectedTab) {
             ForEach(Tab.allCases, id: \.self) { tab in
                 createTabView(for: tab)
                     .tabItem {
-                        Image(tab == selectedTab ? tab.selectedIcon: tab.icon)
+                        Image(tab == sharedState.selectedTab ? tab.selectedIcon: tab.icon)
                         Text(tab.title)
                     }
                     .tag(tab)
             }
         }
+        .environmentObject(sharedState) // 뷰 모델 전달
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
     }
@@ -28,12 +29,21 @@ struct MainTabView: View {
     @ViewBuilder
     func createTabView(for tab: Tab) -> some View {
         switch tab {
+        case .home:
+            HomeView()
         case .quest:
-            QuestView()
+            QuestView(initialXpStat: sharedState.selectedXpStat)
         case .approval:
             ApprovalView()
+        case .ranking:
+            RankingView()
         case .mypage:
             MyPageView()
         }
     }
+}
+
+class SharedState: ObservableObject {
+    @Published var selectedTab: Tab = .home
+    @Published var selectedXpStat: XpStat = .strength
 }

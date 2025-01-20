@@ -10,7 +10,7 @@ import Alamofire
 
 final class UserNetwork {
     private let url = APIManager.makeURL(CustomerTarget(path: "user"))
-        
+    
     func getUser() async -> Result<Response<User>, Error> {
         return await Network.requestData(url: url, method: .get, parameters: nil, withToken: true)
     }

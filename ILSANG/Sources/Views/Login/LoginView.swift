@@ -11,26 +11,47 @@ struct LoginView: View {
     @StateObject var vm: LoginViewModel
     
     var body: some View {
-        VStack(spacing: 84) {
-            Image(.loginLogo)
+        ZStack {
+            VStack(spacing: 28) {
+                titleView
+                CarouselAutoSlideView(images: [.slide0, .slide1, .slide2, .slide3, .slide4])
+                    .shadow(color: .primaryPurple.opacity(0.2), radius: 10, x: 0, y: 4)
+            }
+            .offset(y: -80)
             
             VStack(spacing: 16) {
-#if DEBUG
-                KakaoLoginButtonView(buttonAction: vm.kakaoButtonAction)
-                GoogleLoginButtonView(buttonAction: vm.googleButtonAction)
-#endif
-                AppleLoginButtonView(vm: vm)
+                Spacer()
 #if DEBUG
                 Text("테스트 로그인")
                     .onTapGesture { vm.testLogin() }
 #endif
+
+                AppleLoginButtonView(vm: vm)
+                // KakaoLoginButtonView(buttonAction: vm.kakaoButtonAction)
+                // GoogleLoginButtonView(buttonAction: vm.googleButtonAction)
             }
-            .frame(height: 200)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 38)
         }
-        .padding(.top, 90)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white)
         .navigationBarBackButtonHidden()
+    }
+    
+    private var titleView: some View {
+        VStack {
+            Text("특별한 하루를 위한")
+            HStack(spacing: 0) {
+                Text("작은 도전, ")
+                Text("일")
+                    .foregroundColor(.primaryPurple)
+                Text("상")
+                    .foregroundColor(.secondaryGreen)
+                Text("!")
+            }
+            .foregroundColor(.black)
+        }
+        .font(.system(size: 23, weight: .bold))
     }
 }
 

@@ -13,7 +13,11 @@ struct ChangeNickNameView: View {
     
     @State private var name: String = ""
     @State private var isSame : Bool = false
+    @State private var isqualified : Bool = true
     @State private var showAlert : Bool = false
+    
+    //닉네임 최대치
+    private let characterLimit = 12
     
     var body: some View {
         ZStack {
@@ -48,15 +52,28 @@ struct ChangeNickNameView: View {
                                 .cornerRadius(12)
                         )
                         .padding(.bottom, 12)
+                        .onChange(of: name) { _, maxName in
+                            if maxName.count > characterLimit {
+                                name = String(maxName.prefix(characterLimit))
+                            }
+                            isqualified = isValidNickname(maxName)
+                        }
                     
-                    Text("입력하신 닉네임은 이미 사용중이에요.\n다른 닉네임을 입력해주세요.")
-                        .opacity(isSame ? 1 : 0)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.subRed)
+                    ZStack(alignment: .leading) {
+                        Text("한글+영어+숫자 포함 2 ~ 12자 이하로 닉네임을 입력해주세요.")
+                            .opacity(isqualified ? 0 : 1)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.subRed)
+                        
+                        Text("입력하신 닉네임은 이미 사용중이에요.\n다른 닉네임을 입력해주세요.")
+                            .opacity(isSame ? 1 : 0)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.subRed)
+                    }
                     
                     Spacer()
                     
-                    PrimaryButton(title: "변경 완료", buttonAble: !isSame || !name.isEmpty) {
+                    PrimaryButton(title: "변경 완료", buttonAble: !isSame && isqualified) {
                         Task {
                             if await UserNetwork().putUser(nickname: name) {
                                 withAnimation {
@@ -78,5 +95,13 @@ struct ChangeNickNameView: View {
                 SettingAlertView(alertType: .NickName,onCancel: {showAlert = false}, onConfirm: {dismiss()})
             }
         }
+    }
+    
+    private func isValidNickname(_ name: String) -> Bool {
+        let language = ".*[가-힣a-zA-Z0-9]+.*"
+        let isMatche = NSPredicate(format: "SELF MATCHES %@", language).evaluate(with: name)
+        let isValidLength = (2...12).contains(name.count)
+        
+        return isMatche && isValidLength
     }
 }

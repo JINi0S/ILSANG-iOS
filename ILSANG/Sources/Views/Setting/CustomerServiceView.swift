@@ -24,7 +24,7 @@ struct CustomerServiceView: View {
                 
                 Spacer()
                 
-                Text("1sang.official")
+                Text("illsang.official")
                     .underline()
                     .font(.system(size: 17))
                     .foregroundColor(.gray200)
@@ -48,8 +48,8 @@ struct CustomerServiceView: View {
 
 private func openInstagram() {
     //고객센터 인스타 URL
-    let appURL = URL(string: "instagram://user?username=1sang.official")!
-    let webURL = URL(string: "https://www.instagram.com/1sang.official?igsh=MXM3YTB1ZXp5aDFzOQ%3D%3D&utm_source=qr")!
+    let appURL = URL(string: "instagram://user?username=illsang.official")!
+    let webURL = URL(string: "https://www.instagram.com/illsang.official?igsh=NjJjbXc3cmU3aG56")!
     
     if UIApplication.shared.canOpenURL(appURL) {
           UIApplication.shared.open(appURL, options: [:], completionHandler: nil)

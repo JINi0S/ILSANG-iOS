@@ -1,0 +1,17 @@
+//
+//  Release.xcconfig
+//  ILSANG
+//
+//  Created by Lee Jinhee on 10/31/24.
+//
+
+
+// Server URL
+SERVER_IP = 52.79.126.243
+ROOT_URL = http:/$()/52.79.126.243
+PORT = 8881
+
+
+// App Settings
+APP_NAME = 일상
+APP_BUNDLE_ID = com.ilsang240615
