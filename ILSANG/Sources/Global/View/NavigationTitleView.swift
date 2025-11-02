@@ -11,6 +11,7 @@ struct NavigationTitleView: View {
     let title: String
     var isSeparatorHidden = false
     var isDismissButtonHidden = false
+    var background: Color = .white
     var action: (() -> Void?)? = nil
 
     var body: some View {
@@ -26,11 +27,11 @@ struct NavigationTitleView: View {
                         }
                     }
                 }
-                .foregroundColor(.gray500)
+                .foregroundColor(.black)
                 .font(.system(size: 17, weight: .bold))
                 .padding(.horizontal, 20)
                 .frame(height: 45)
-                .background(Color.white)
+                .background(background)
             
             if !isSeparatorHidden {
                 SeparatorView()
@@ -49,11 +50,21 @@ struct SeparatorView: View {
     }
 }
 
+struct XmarkButton: View {
+    var color: Color = .gray500
+    
+    var body: some View {
+        Image(systemName: "xmark")
+            .foregroundColor(color)
+            .font(.system(size: 18))
+    }
+}
+
 struct DismissButton: View {
     var body: some View {
         Image(systemName: "chevron.left")
             .foregroundColor(.gray500)
-            .font(.custom("SFPRODISPLAYREGULAR", size: 22))
+            .font(.system(size: 22))
     }
 }
 
@@ -61,7 +72,7 @@ struct DeleteButton: View {
     var body: some View {
         Image(systemName: "trash")
             .foregroundColor(.gray500)
-            .font(.custom("SFPRODISPLAYREGULAR", size: 22))
+            .font(.system(size: 22))
             .padding(.top, 10)
             .padding(.horizontal, 15)
     }

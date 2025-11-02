@@ -22,8 +22,10 @@ struct CameraView: View {
                 Button {
                     dismiss()
                 } label: {
-                    DismissButton()
-                        .padding()
+                    XmarkButton()
+                        .frame(width: 40, height: 40)
+                        .padding(12)
+                        .padding(.top, 20)
                 }
             }
             .ignoresSafeArea()
@@ -77,7 +79,7 @@ struct CameraView: View {
         }
         .padding(.horizontal, 30)
         .padding(.bottom, 75)
-        .onChange(of: viewModel.recentImage) { _ in
+        .onChange(of: viewModel.recentImage) { _ , _ in
             // 카메라에서 촬영한 이미지로 카메라 뷰모델의 최근 이미지가 변경되면,
             // submitViewModel의 이미지도 업데이트하여 SubmitRouterView에서 이미지를 보여줍니다.
             if let myImage = viewModel.recentImage {
@@ -108,7 +110,7 @@ struct CameraPreviewView: UIViewRepresentable {
         view.backgroundColor = .black
         view.videoPreviewLayer.videoGravity = .resizeAspectFill
         view.videoPreviewLayer.cornerRadius = 0
-        view.videoPreviewLayer.connection?.videoOrientation = .portrait
+        view.videoPreviewLayer.connection?.videoRotationAngle = 0
         
         return view
     }
@@ -119,5 +121,7 @@ struct CameraPreviewView: UIViewRepresentable {
 }
 
 #Preview {
-    CameraView(submitViewModel: SubmitRouterViewModel(selectedQuest: .mockData))
+    let challengeNetwork = ChallengeNetwork()
+    
+    CameraView(submitViewModel: SubmitRouterViewModel(selectedQuest: .mockData, submitService: ImageChallengeSubmitService(imageNetwork: ImageNetwork(), challengeNetwork: challengeNetwork), challengeNetwork:challengeNetwork))
 }

@@ -8,12 +8,19 @@
 import SwiftUI
 import Photos
 
+/// 제출을 처리하고 서버와 통신하는 역할
 struct SubmitRouterView: View {
     @StateObject var vm: SubmitRouterViewModel
     @Environment(\.dismiss) var dismiss
 
-    init(selectedQuest: QuestViewModelItem) {
-        _vm = StateObject(wrappedValue: SubmitRouterViewModel(selectedQuest: selectedQuest))
+    init(selectedQuest: QuestItem, submitService: ImageChallengeSubmitService, challengeNetwork: ChallengeNetwork) {
+        _vm = StateObject(
+            wrappedValue: SubmitRouterViewModel(
+                selectedQuest: selectedQuest,
+                submitService: submitService,
+                challengeNetwork: challengeNetwork
+            )
+        )
     }
 
     var body: some View {
@@ -41,7 +48,7 @@ struct SubmitRouterView: View {
         }
         .background(Color.white)
         .overlay {
-            SubmitAlertView(selectedImage: vm.selectedImage, selectedQuest: vm.selectedQuest, showSubmitAlertView: vm.showSubmitAlertView)
+            SubmitAlertView(vm: vm)
         }
     }
 }
@@ -73,5 +80,9 @@ extension SubmitRouterView {
 }
 
 #Preview {
-    SubmitRouterView(selectedQuest: .mockData)
+    SubmitRouterView(
+        selectedQuest: .mockData,
+        submitService: ImageChallengeSubmitService(imageNetwork: ImageNetwork(), challengeNetwork: ChallengeNetwork()),
+        challengeNetwork: ChallengeNetwork()
+    )
 }

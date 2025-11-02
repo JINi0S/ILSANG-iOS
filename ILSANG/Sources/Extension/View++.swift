@@ -12,6 +12,27 @@ extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape( RoundedCorner(radius: radius, corners: corners) )
     }
+    
+    @ViewBuilder
+    func frame(_ size: CGSize) -> some View {
+        self.frame(width: size.width, height: size.height)
+    }
+    
+    @ViewBuilder
+    func frame(_ size: CGFloat) -> some View {
+        self.frame(width: size, height: size)
+    }
+    
+    @ViewBuilder
+    func cropImagePicker(show: Binding<Bool>, croppedImage: Binding<UIImage?>) -> some View {
+        CustomImagePicker(show: show, croppedImage: croppedImage) {
+            self
+        }
+    }
+    
+    func haptics(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 }
 
 struct RoundedCorner: Shape {
@@ -65,5 +86,42 @@ extension View {
             }
         }
         return result
+    }
+    
+    func styledFont(_ fontWeight: UIFont.Weight, size: CGFloat, lineHeight: CGFloat, tracking: CGFloat = 0) -> some View {
+        return ModifiedContent(
+            content: self,
+            modifier: FontWithLineHeight(
+                font: Font.uiFont(fontWeight, size),
+                lineHeight: lineHeight,
+                tracking: tracking
+            )
+        )
+    }
+    
+    func styledFont(_ fontStyle: FontStyle) -> some View {
+        return ModifiedContent(
+            content: self,
+            modifier: FontWithLineHeight(
+                font: Font.uiFont(fontStyle.weight, fontStyle.size),
+                lineHeight: fontStyle.lineHeight,
+                tracking: fontStyle.tracking
+            )
+        )
+    }
+
+    func roundedBackground(cornerRadius: CGFloat, bgColor: Color = .white) -> some View {
+        return ModifiedContent(
+            content: self,
+            modifier: RoundedBackground(
+                cornerRadius: cornerRadius,
+                backgroundColor: bgColor
+            )
+        )
+    }
+    
+    // 키보드밖 화면 터치시 키보드 사라짐 .onTapGesture에서 사용
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }

@@ -9,11 +9,9 @@ import SwiftUI
 
 struct QuestImageWithTagView: View {
     let image: UIImage?
-    let tagTitle: String
-    let tagStyle: TagView.TagStyle
-    let tagOffset: (x: CGFloat, y: CGFloat)
     let imageSize: CGSize
-    
+    let tagConfig: TagConfig?
+
     var body: some View {
         Image(uiImage: image ?? .logo)
             .resizable()
@@ -22,8 +20,10 @@ struct QuestImageWithTagView: View {
             .background(Color.badgeBlue)
             .clipShape(Circle())
             .overlay(alignment: .topTrailing) {
-                TagView(title: tagTitle, tagStyle: tagStyle)
-                    .position(x: tagOffset.x, y: tagOffset.y)
+                if let tagConfig {
+                    TagView(title: tagConfig.title, image: tagConfig.image, tagStyle: tagConfig.style)
+                        .position(x: tagConfig.offset.x, y: tagConfig.offset.y)
+                }
             }
     }
 }

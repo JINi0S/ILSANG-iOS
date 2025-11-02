@@ -8,24 +8,25 @@
 import SwiftUI
 
 struct SubmitAlertView: View {
-    @ObservedObject var vm: SubmitAlertViewModel
+    @ObservedObject var vm: SubmitRouterViewModel
+    @EnvironmentObject var dependencies: AppDependencies
+    @Environment(\.scenePhase) var scenePhase
     @Environment(\.dismiss) var dismiss
-    
-    init(selectedImage: UIImage?, selectedQuest: QuestViewModelItem, showSubmitAlertView: Bool) {
-        _vm = ObservedObject(wrappedValue: SubmitAlertViewModel(selectedImage: selectedImage, selectedQuest: selectedQuest, imageNetwork: ImageNetwork(), challengeNetwork: ChallengeNetwork(), showSubmitAlertView: showSubmitAlertView)
-        )
-    }
     
     var body: some View {
         ZStack {
             if vm.showSubmitAlertView {
                 Color.black.opacity(0.7).ignoresSafeArea()
-                
                 submitAlertView
-                    .task { await vm.postChallengeWithImage() }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if vm.showSubmitAlertView && vm.submitStatus != .complete {
+                vm.handleScenePhaseChange(to: newPhase)
             }
         }
         .onDisappear {
+            vm.cancelSubmitTask() // 뷰 사라지면 작업 취소
             vm.showSubmitAlertView = false
         }
     }
@@ -33,13 +34,14 @@ struct SubmitAlertView: View {
     @ViewBuilder
     private var submitAlertView: some View {
         switch vm.submitStatus {
-        case .submit, .fail:
+        case .inProgress, .fail, .retry:
             SubmitStatusView(status: vm.submitStatus) {
                 vm.showSubmitAlertView = false
             }
         case .complete:
             SubmitCompleteView(quest: vm.selectedQuest) {
                 vm.showSubmitAlertView = false
+                dependencies.questSubmissionNotifier.markQuestAsSubmitted()
                 dismiss()
             }
         }
@@ -47,5 +49,7 @@ struct SubmitAlertView: View {
 }
 
 #Preview {
-    SubmitAlertView(selectedImage: .img0, selectedQuest: .mockData, showSubmitAlertView: true)
+    let challengeNetwork = ChallengeNetwork()
+
+    SubmitAlertView(vm: SubmitRouterViewModel(selectedImage: nil, selectedQuest: .mockData, submitService: ImageChallengeSubmitService(imageNetwork: ImageNetwork(), challengeNetwork: challengeNetwork), challengeNetwork: challengeNetwork))
 }

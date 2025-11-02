@@ -5,7 +5,7 @@
 //  Created by Lee Jinhee on 5/20/24.
 //
 
-enum Tab: CaseIterable {
+enum Tab: String, CaseIterable {
     case home
     case quest
     case approval

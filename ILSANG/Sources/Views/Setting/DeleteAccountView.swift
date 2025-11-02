@@ -100,7 +100,7 @@ struct DeleteAccountView: View {
             
             if delAlert {
                 SettingAlertView(
-                    alertType: .Withdrawal,
+                    alertType: AlertType.Withdrawal,
                     onCancel: { delAlert = false },
                     onConfirm: { withdraw() }
                 )
@@ -115,7 +115,7 @@ struct DeleteAccountView: View {
             let result = await WithdrawNetwork().getWithdraw()
             switch result {
             case .success:
-                await UserService.shared.withdraw()
+                UserService.shared.withdraw()
                 delAlert = false
             case .failure:
                 delAlert = false

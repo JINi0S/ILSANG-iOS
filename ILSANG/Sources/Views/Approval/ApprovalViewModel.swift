@@ -6,9 +6,23 @@
 //
 
 import SwiftUI
+/*
+✅ 이모지 에셋 변경
+✅ 이모지 불러오기(idx 0, 1..<)
+✅ 이모지 활성&비활성
+✅ 이모지 카운트 +-
+✅ 공유하기 & 신고하기 UI 추가
+✅ 공유하기 & 신고하기 기능 추가
+✅ 페이지네이션
+✅ 리프레시
+*/
+
+enum ApprovalSource: Equatable {
+    case tab
+    case detail(missionId: Int)
+}
 
 final class ApprovalViewModel: ObservableObject {
-    // TODO: 페이지네이션 시 ViewStatus 고려 필요
     enum ViewStatus {
         case error
         case loading
@@ -16,73 +30,104 @@ final class ApprovalViewModel: ObservableObject {
     }
     
     @Published var viewStatus: ViewStatus = .loading
-    @Published var itemList: [ApprovalViewModelItem] = []
-    @Published var currentIdx = 0 {
-        didSet {
-            Task {
-                await self.handleIndexChange(oldValue)
-            }
-        }
-    }
-    @Published var isScrolling = false
-    @Published var emoji: Emoji?
-    @Published var showReportAlert = false
+    @Published var itemList: [ApprovalMissionHistoryItem] = []
     
-    private lazy var paginationManager = PaginationManager<ApprovalViewModelItem>(
-        size: 10,
-        threshold: 3,
-        loadPage: { [weak self] page in
+    @Published var showReportAlert = false
+    @Published var selectedChallenge: ApprovalMissionHistoryItem?
+    
+    var paginationManager: PaginationManager<ApprovalMissionHistoryItem>?
+    let approvalSource: ApprovalSource
+
+    private let emojiNetwork: EmojiNetwork
+    private let missionHistoryRepository: MissionHistoryRepository
+    private let areaNameService: AreaNameProvider
+
+    init(
+        approvalSource: ApprovalSource,
+        emojiNetwork: EmojiNetwork,
+        missionHistoryRepository: MissionHistoryRepository,
+        areaNameService: AreaNameProvider
+    ) {
+        self.approvalSource = approvalSource
+        self.emojiNetwork = emojiNetwork
+        self.missionHistoryRepository = missionHistoryRepository
+        self.areaNameService = areaNameService
+        
+        self.paginationManager = PaginationManager<ApprovalMissionHistoryItem>(
+            size: 10,
+            threshold: 3
+        )
+        paginationManager?.loadPageData = { [weak self] page in
             guard let self = self else { return ([], 0) }
             return await self.getChallengesWithImage(page: page)
         }
-    )
+        Log("✨ ApprovalViewModel: init")
+    }
     
-    private let emojiNetwork: EmojiNetwork
-    private let challengeNetwork: ChallengeNetwork
+    deinit {
+        Log("✨ ApprovalViewModel: deinit")
+    }
     
-    init(emojiNetwork: EmojiNetwork, challengeNetwork: ChallengeNetwork) {
-        self.emojiNetwork = emojiNetwork
-        self.challengeNetwork = challengeNetwork
+    
+    @MainActor
+    func loadDataIfNeeded() async {
+        if itemList.isEmpty {
+            await loadInitialData()
+        }
     }
     
     @MainActor
-    func getData() async {
+    func loadInitialData() async {
         changeViewStatus(.loading)
-        await self.paginationManager.loadData(isRefreshing: true)
-
-        self.currentIdx = 0
-        if let challengeId = itemList.first?.id {
-            await getEmoji(challengeId: challengeId)
-        }
+        await self.paginationManager?.loadData(isRefreshing: true)
         changeViewStatus(.loaded)
     }
     
     @MainActor
-    func changeViewStatus(_ viewStatus: ViewStatus) {
-        self.viewStatus = viewStatus
+    func loadMoreData() async {
+        guard ((paginationManager?.canLoadMoreData()) != nil) else { return }
+        await paginationManager?.loadData(isRefreshing: false)
     }
-    
+        
+    // MARK: - 도전내역 랜덤 조회
+    /// 페이지 번호를 받아 해당 페이지의 도전 내역 데이터를 로드 및 가공
     @MainActor
-    func handleIndexChange(_ previousIdx: Int) async {
-        guard !itemList.isEmpty else { return }
+    func getChallengesWithImage(page: Int) async -> ([ApprovalMissionHistoryItem], Int) {
+        // 1. 챌린지 데이터 로드
+        let (challenges, total) = await loadChallenges(page: page)
         
-        await getEmoji(challengeId: itemList[currentIdx].id)
+        // 2. 중복 제거
+        let filteredChallenges = removeDuplicateChallenges(challenges)
         
-        if previousIdx < currentIdx {
-            if paginationManager.canLoadMoreData(index: currentIdx, currentCount: itemList.count) {
-                await paginationManager.loadData(isRefreshing: false)
-            }
+        // 3. 이미지 병합
+        let enrichedChallenges = await enrichChallengesWithImage(filteredChallenges)
+        
+        // 4. 지역 코드 → 지역명 매핑
+        let mappedChallenges = await mapAreaNames(for: enrichedChallenges)
+        
+        // 5. itemList 업데이트
+        updateItemList(for: page, with: mappedChallenges)
+        
+        return (itemList, total)
+    }
+
+    // MARK: 도전내역 조회 - Helper Methods
+    /// 1. 챌린지 데이터 로드
+    private func loadChallenges(page: Int) async -> ([ApprovalMissionHistoryItem], Int) {
+        switch approvalSource {
+        case .tab:
+            let result = await getRandomChallenges(page: page, size: paginationManager?.size ?? 10)
+            return (result.data, result.total)
+        case .detail(let missionId):
+            let result = await getChallenges(missionId: missionId, page: page, size: paginationManager?.size ?? 10)
+            return (result.data, result.total)
         }
     }
     
-    @MainActor
-    func getChallengesWithImage(page: Int) async -> ([ApprovalViewModelItem], Int) {
-        let getChallengeResult = await getRandomChallenges(page: page, size: paginationManager.size)
-        var challenges = getChallengeResult.data
-        
-        // 중복된 id 제거
-        var seenIDs = Set<String>()
-        challenges = challenges.filter { challenge in
+    /// 2. 중복 제거: 동일한 ID를 가진 챌린지를 필터링하여 중복 제거
+    private func removeDuplicateChallenges(_ challenges: [ApprovalMissionHistoryItem]) -> [ApprovalMissionHistoryItem] {
+        var seenIDs = Set<Int>()
+        return challenges.filter { challenge in
             if seenIDs.contains(challenge.id) {
                 return false
             } else {
@@ -90,222 +135,161 @@ final class ApprovalViewModel: ObservableObject {
                 return true
             }
         }
+    }
+
+    /// 3. 이미지 병합: 각 챌린지에 이미지 정보를 추가
+    private func enrichChallengesWithImage(
+        _ challenges: [ApprovalMissionHistoryItem]
+    ) async -> [ApprovalMissionHistoryItem] {
+        return await withTaskGroup(of: (Int, UIImage?, UIImage?).self) { group in
+            for (index, challenge) in challenges.enumerated() {
+                group.addTask {
+                    async let challengeImage = ImageCacheService.shared.loadImageAsync(imageId: challenge.imageId)
+                    async let profileImage: UIImage? = {
+                        guard let profileImageId = challenge.profileImageId else { return nil }
+                        return await ImageCacheService.shared.loadImageAsync(imageId: profileImageId)
+                    }()
+                    
+                    return (index, await challengeImage, await profileImage)
+                }
+            }
+            
+            let enrichedChallenges = challenges
+            for await (index, challengeImage, profileImage) in group {
+                if let challengeImage = challengeImage {
+                    enrichedChallenges[index].image = challengeImage
+                }
+                if let profileImage = profileImage {
+                    enrichedChallenges[index].profileImage = profileImage
+                }
+            }
+            return enrichedChallenges
+        }
+    }
+
+    /// 4. 지역 코드 → 지역명 매핑
+    private func mapAreaNames(for challenges: [ApprovalMissionHistoryItem]) async -> [ApprovalMissionHistoryItem] {
+        var results: [ApprovalMissionHistoryItem] = []
         
+        for challenge in challenges {
+            if let code = challenge.commercialAreaCode,
+               let name = await areaNameService.getAreaName(for: code) {
+                challenge.commercialAreaName = name
+            }
+            results.append(challenge)
+        }
+        return results
+
+    }
+    
+    /// 5. itemList 업데이트
+    @MainActor
+    private func updateItemList(for page: Int, with challenges: [ApprovalMissionHistoryItem]) {
         if page == 0 {
             itemList = challenges
         } else {
             itemList += challenges
         }
-        
-        await withTaskGroup(of: (Int, UIImage?).self) { group in
-            for (index, challenge) in challenges.enumerated() {
-                group.addTask {
-                    let image = await ImageCacheService.shared.loadImageAsync(imageId: challenge.imageId)
-                    return (index, image)
-                }
-            }
-            
-            for await (index, image) in group {
-                if let image = image {
-                    if page == 0 {
-                        itemList[index].image = image
-                    } else {
-                        itemList[itemList.count - challenges.count + index].image = image
-                    }
-                }
-            }
-        }
-        
-        return (itemList, getChallengeResult.total)
     }
     
-    private func getRandomChallenges(page: Int, size: Int) async -> (data: [ApprovalViewModelItem], total: Int) {
-        let res = await challengeNetwork.getRandomChallenges(page: page, size: size)
+    /// like 버튼을 눌렀을 때 호출됩니다.
+    func onLike(for idx: Int) {
+        Task {
+            await updateEmoji(emojiType: .like, idx: idx)
+        }
+    }
+    
+    /// hate 버튼을 눌렀을 때 호출됩니다.
+    func onHate(for idx: Int) {
+        Task {
+            await updateEmoji(emojiType: .hate, idx: idx)
+        }
+    }
+    
+    @MainActor
+    private func updateEmoji(emojiType: EmojiType, idx: Int) async {
+        let item = itemList[idx]
+        
+        // 현재 상태
+        let wasSelected = item.emojis.isSelected(emojiType)
+        
+        // 서버 요청
+        let success: Bool
+        if wasSelected {
+            success = await emojiNetwork.deleteEmoji(missionHistoryId: item.id, emojiType: emojiType)
+        } else {
+            success = await emojiNetwork.postEmoji(missionHistoryId: item.id, emojiType: emojiType)
+        }
+        
+        guard success else { return } // 서버 업데이트 실패 시 종료
+        
+        // 로컬 상태 토글
+        item.emojis.toggle(emojiType)
+        
+        // count 업데이트
+        func newCount(_ current: Int, isSelected: Bool) -> Int {
+            max(current + (isSelected ? 1 : -1), 0)
+        }
+        
+        switch emojiType {
+        case .like:
+            item.likeCount = newCount(item.likeCount, isSelected: item.emojis.isSelected(.like))
+        case .hate:
+            item.hateCount = newCount(item.hateCount, isSelected: item.emojis.isSelected(.hate))
+        }
+    }
+    
+    /// 신고 확인 버튼을 눌렀을 때 호출됩니다.
+    /// 선택된 챌린지를 서버에 신고 요청한 후, 알림을 닫습니다.
+    func confirmReport() async {
+        guard let _ = selectedChallenge else { return }
+        await reportChallenge()
+        showReportAlert = false
+    }
+    
+    /// 신고 알림을 취소합니다.
+    func dismissReportAlert() {
+        showReportAlert = false
+    }
+    
+    /// 뷰 상태를 변경합니다.
+    /// - Parameter viewStatus: 변경할 새로운 뷰 상태.
+    @MainActor
+    func changeViewStatus(_ viewStatus: ViewStatus) {
+        self.viewStatus = viewStatus
+    }
+    
+    // MARK: - API 호출부
+    private func getRandomChallenges(page: Int, size: Int) async -> (data: [ApprovalMissionHistoryItem], total: Int) {
+        let res = await missionHistoryRepository.getRandomMissionHistories(page: page, size: size)
         switch res {
         case .success(let response):
-            return (response.data.map { ApprovalViewModelItem.init(challenge: $0) }, response.total)
-        case .failure:
+            return (response.data.map {$0.toApprovalItem()}, response.total)
+        case .failure(let err):
+            Log("도전내역랜덤 조회 실패 \(err.localizedDescription)")
             return ([], 0)
         }
     }
     
-    /// 업데이트할 이모지 타입에 따라 이전 이모지 상태의 반대로 서버에 업데이트를 요청하고,
-    /// 서버 업데이트가 성공하면 로컬 상태를 업데이트합니다.
-    /// - Parameter emojiType: 업데이트할 이모지의 유형 (like 또는 hate).
-    @MainActor func updateEmojiWithPrev(emojiType: EmojiType) async {
-        guard let prevEmoji = self.emoji else { return }
-        
-        let wasPrevEmojiActive: Bool
-        var emojiId: String? = nil
-
-        switch emojiType {
-        case .like:
-            wasPrevEmojiActive = prevEmoji.isLike
-            if let prevLikeId = prevEmoji.likeId {
-                emojiId = prevLikeId
-            }
-        case .hate:
-            wasPrevEmojiActive = prevEmoji.isHate
-            if let prevHateId = prevEmoji.hateId {
-                emojiId = prevHateId
-            }
-        }
-        
-        let challengeId = itemList[currentIdx].id
-        let isServerUpdateSuccessful = await updateEmojiStatus(challengeId: challengeId, emojiType: emojiType, emojiId: emojiId, prevEmojiActive: wasPrevEmojiActive)
-        
-        if isServerUpdateSuccessful {
-            switch emojiType {
-            case .like:
-                self.emoji?.isLike.toggle()
-                if let emoji = self.emoji, !emoji.isLike {
-                    self.emoji?.likeId = nil
-                }
-            case .hate:
-                self.emoji?.isHate.toggle()
-                if let emoji = self.emoji, !emoji.isHate {
-                    self.emoji?.hateId = nil
-                }
-            }
+    private func getChallenges(missionId: Int, page: Int, size: Int) async -> (data: [ApprovalMissionHistoryItem], total: Int) {
+        let res = await missionHistoryRepository.getMissionHistories(missionId: missionId, page: page, size: size)
+        switch res {
+        case .success(let response):
+            return (response.data.map {$0.toApprovalItem()}, response.total)
+        case .failure(let err):
+            Log("도전내역랜덤 조회 실패 \(err.localizedDescription)")
+            return ([], 0)
         }
     }
     
-    /// 이모지 등록하면 emojiid받아와서 현재 Emoji에 넣어줌
-    @MainActor
-    private func updateEmojiStatus(challengeId: String, emojiType: EmojiType, emojiId: String?, prevEmojiActive: Bool) async -> Bool {
-        var updateSucceeded = false
-        if prevEmojiActive {
-            guard let emojiId = emojiId else { return false }
-            updateSucceeded = await emojiNetwork.deleteEmoji(emojiId: emojiId)
-        } else {
-            let res = await emojiNetwork.postEmoji(challengeId: challengeId, emojiType: emojiType)
-            switch res {
-            case .success(let emojiId):
-                switch emojiType {
-                case .like:
-                    self.emoji?.likeId = emojiId
-                case .hate:
-                    self.emoji?.hateId = emojiId
-                }
-                updateSucceeded = true
-            case .failure:
-                updateSucceeded = false
-            }
-        }
-        return updateSucceeded
-    }
-    
-    @MainActor
-    func getEmoji(challengeId: String) async {
-        let getEmojiResult = await emojiNetwork.getEmoji(challengeId: challengeId)
-        switch getEmojiResult {
-        case .success(let model):
-            self.emoji = model.data
-        case .failure:
-            self.emoji = nil
-        }
-    }
-    
-    func reportChallenge() async {
-        let challengeId = self.itemList[currentIdx].id
-        let result = await challengeNetwork.patchChallenge(challengeId: challengeId)
+    private func reportChallenge() async {
+        guard let missionHistoryId = self.selectedChallenge?.id else { return }
+        let result = await missionHistoryRepository.putMissionHistory(missionHistoryId: missionHistoryId)
         switch result {
         case .success:
-            await getData()
+            await loadInitialData() // TODO: 해당 챌린지를 목록에서 지우기
         case .failure(let err):
-            Log("챌린지 신고 실패 \(challengeId) \(err.localizedDescription)")
+            Log("도전내역 신고 실패 \(missionHistoryId) \(err.localizedDescription)")
         }
     }
-    
-    func handleDragChange(_ value: DragGesture.Value) {
-        if value.translation.height < 0 && currentIdx != itemList.count-1 {
-            isScrolling = true
-            
-            itemList[currentIdx].offset = value.translation.height
-            
-            /// 다음 이미지 y축 올리는 효과
-            if currentIdx + 1 != itemList.count-1 {
-                itemList[currentIdx + 1].offset = -12
-            }
-        }
-    }
-    
-    func handleDragEnd(_ value: DragGesture.Value, _ viewHeight: CGFloat) {
-        if value.translation.height < 0 {  /// 위로 스크롤
-            if currentIdx != itemList.count-1 {
-                itemList[currentIdx].offset = -viewHeight
-                if currentIdx + 1 != itemList.count-1 {
-                    itemList[currentIdx + 1].offset = 0
-                }
-                currentIdx += 1
-            } else {
-                itemList[currentIdx].offset = 0
-            }
-        } else {  /// 아래로 스크롤
-            if currentIdx > 0 {
-                if value.translation.height > 0 {
-                    itemList[currentIdx - 1].offset = 0
-                    currentIdx -= 1
-                } else {
-                    itemList[currentIdx - 1].offset = -viewHeight
-                }
-            }
-        }
-        isScrolling = false
-    }
-    
-    func calculateOpacity(itemIndex: Int) -> CGFloat {
-        switch abs(itemIndex - currentIdx) {
-        case 0:
-            return isScrolling ? 0.5 : 1 /// 활성화된 아이템이 >> 화면 스크롤 중이면 0.5, 스크롤 중이 아니면 1
-        case 1:
-            return isScrolling ? 1 : 0.5  /// 다음에 보여질 아이템이 >> 화면 스크롤 중이면 1, 스크롤 중이 아니면 0.5
-        case 2:
-            return 0.2
-        default:
-            return 0
-        }
-    }
-}
-
-struct ApprovalViewModelItem: Identifiable {
-    let id: String
-    var title: String
-    var image: UIImage?
-    var imageId: String
-    var offset: CGFloat
-    var nickname: String
-    var time: String
-    
-    init(id: String = UUID().uuidString, title: String, image: UIImage? = nil, imageId: String, offset: CGFloat, nickname: String, time: String) {
-        self.id = id
-        self.title = title
-        self.image = image
-        self.imageId = imageId
-        self.offset = offset
-        self.nickname = nickname
-        self.time = time
-    }
-    
-    init(challenge: Challenge) {
-        self.id = challenge.challengeId
-        self.title = challenge.missionTitle ?? ""
-        self.image = nil
-        self.imageId = challenge.receiptImageId
-        self.offset = 0
-        // TODO: nickname 옵셔널 해제
-        self.nickname = challenge.userNickName ?? "일상"
-        self.time = challenge.createdAt.timeAgoSinceDate()
-    }
-    
-    static var mockData = [
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상1", time: "3시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상2", time: "1시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상3", time: "2시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상4", time: "2시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상5", time: "1시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상6", time: "3시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상7", time: "2시간 전"),
-        ApprovalViewModelItem(title: "바닐라라떼마시기", imageId: "IMRE2024061314275774", offset: 0, nickname: "일상8", time: "3시간 전")
-    ]
 }
